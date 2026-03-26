@@ -1,0 +1,20 @@
+- name:  argocd
+  hosts: localhost
+
+  tasks:
+    # deploy secretstore first
+    - name: create secretstore
+      ansible.builtin.shell:
+        cmd: kubectl apply -f ./related_yaml/clustersecretstore.yaml
+
+    - name: deploy auth-service
+      ansible.builtin.shell:
+        cmd: kubectl apply -f ./related_yaml/auth-service.yaml
+
+    - name: deploy order-service
+      ansible.builtin.shell:
+        cmd: kubectl apply -f ./related_yaml/order-service.yaml
+
+    - name: deploy frontend-service
+      ansible.builtin.shell:
+        cmd: kubectl apply -f ./related_yaml/frontend-service.yaml

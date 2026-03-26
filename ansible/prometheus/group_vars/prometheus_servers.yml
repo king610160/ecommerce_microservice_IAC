@@ -1,0 +1,16 @@
+---
+# host
+hosts: aws_ec2
+
+# prometheus 設定
+prometheus_version: "3.2.1" # 建議用正式版，非 RC 版
+prometheus_user: "ec2-user"
+prometheus_group: "ec2-user"
+prometheus_port: 9090
+
+# 路徑定義
+prometheus_base_dir: "/home/ec2-user"
+prometheus_data_dir: "/data/prometheus/data"
+
+# Prometheus 設定
+scrape_interval: "15s"

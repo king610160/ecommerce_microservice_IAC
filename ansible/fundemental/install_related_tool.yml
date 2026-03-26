@@ -1,0 +1,98 @@
+---
+- name: Setup Jenkins Server Environment (AWS CLI & Docker)
+  hosts: "{{ hosts }}"
+  become: yes
+  vars:
+    aws_cli_zip: "/tmp/awscliv2.zip"
+
+  tasks:
+    # --- 1. 安裝基礎工具 ---
+    - name: Install prerequisite packages (unzip, tar, git)
+      ansible.builtin.dnf:
+        name:
+          - unzip
+          - tar
+          - git
+        state: present
+
+    # --- 2. 安裝 AWS CLI v2 ---
+    - name: Check if AWS CLI is installed
+      ansible.builtin.command: aws --version
+      register: aws_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Download and Install AWS CLI
+      when: aws_check.rc != 0
+      block:
+        - name: Download AWS CLI zip
+          ansible.builtin.get_url:
+            url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            dest: "{{ aws_cli_zip }}"
+
+        - name: Unzip and Install AWS CLI
+          ansible.builtin.unarchive:
+            src: "{{ aws_cli_zip }}"
+            dest: /tmp
+            remote_src: yes
+
+        - name: Run AWS CLI install script
+          ansible.builtin.command: /tmp/aws/install
+          args:
+            creates: /usr/local/bin/aws
+
+    # --- 3. 安裝與啟動 Docker ---
+    - name: Install Docker
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+
+    - name: Start and Enable Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # --- 4. 權限設定 (關鍵步驟) ---
+    - name: Add ec2-user to docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Add jenkins user to docker group (if jenkins user exists)
+      ansible.builtin.user:
+        name: jenkins
+        groups: docker
+        append: yes
+      ignore_errors: yes
+
+    # --- 5. 重啟 Jenkins (讓權限生效) ---
+    - name: Restart Jenkins to apply group changes
+      ansible.builtin.systemd:
+        name: jenkins
+        state: restarted
+      # 只有在 jenkins 服務存在時才重啟，避免報錯
+      ignore_errors: yes
+
+    # --- 6. 驗證結果 ---
+    - name: Verify Installations
+      ansible.builtin.shell: !unsafe |
+        aws --version
+        docker version --format '{{.Server.Version}}'
+      register: verify_output
+      changed_when: false
+
+    - name: Show Verification Output
+      debug:
+        msg: "{{ verify_output.stdout_lines }}"
+
+    # --- 7. 驗證 ---
+    - name: Verify Docker Group Membership
+      ansible.builtin.shell: "grep docker /etc/group"
+      register: group_output
+      changed_when: false
+
+    - name: Show Results
+      debug:
+        msg: "{{ group_output.stdout_lines }}"

@@ -1,0 +1,14 @@
+[Unit]
+Description=Loki service
+After=network.target
+
+[Service]
+Type=simple
+User={{ loki_user }}
+Group={{ loki_group }}
+# 指向軟連結路徑
+ExecStart={{ loki_link_dir }}/loki -config.file={{ loki_config_dir }}/loki.yml -config.expand-env=true
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

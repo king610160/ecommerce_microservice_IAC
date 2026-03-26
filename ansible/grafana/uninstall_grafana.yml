@@ -1,0 +1,44 @@
+---
+- name: Uninstall Grafana
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/grafana_servers.yml"
+
+  tasks:
+    - name: Stop and disable Grafana service
+      ansible.builtin.systemd:
+        name: grafana
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Remove Grafana Systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/grafana.service
+        state: absent
+      notify: Reload Systemd
+
+    - name: Remove Grafana soft link
+      ansible.builtin.file:
+        path: "{{ grafana_link_dir }}"
+        state: absent
+
+    - name: Remove Grafana installation and data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ grafana_install_dir }}"
+        - "{{ grafana_data_dir }}"
+        - "{{ grafana_log_dir }}"
+
+    - name: Cleanup any remaining Tarball
+      ansible.builtin.file:
+        path: "{{ grafana_base_dir }}/{{ grafana_tarball_name }}"
+        state: absent
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

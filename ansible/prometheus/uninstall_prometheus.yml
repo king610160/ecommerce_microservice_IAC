@@ -1,0 +1,46 @@
+---
+- name: Uninstall Prometheus and Cleanup
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/prometheus_servers.yml"
+  tasks:
+
+    - name: Stop and Disable Prometheus service
+      ansible.builtin.systemd:
+        name: prometheus
+        state: stopped
+        enabled: no
+      ignore_errors: yes # 即使服務不存在也繼續
+
+    - name: Remove Systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/prometheus.service
+        state: absent
+      notify: Reload Systemd
+
+    - name: Find all prometheus directories and links
+      ansible.builtin.find:
+        paths: "{{ prometheus_base_dir }}"
+        patterns: "prometheus*"
+        # 改為 any，這會包含 directory, file, 和 link
+        file_type: any
+        # 確保不會跑進去子目錄找，只找當前目錄
+        recurse: no
+      register: found_dirs
+
+    - name: Remove found items
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ found_dirs.files }}"
+
+    - name: Remove Prometheus Data Directory (Deep Clean)
+      ansible.builtin.file:
+        path: "{{ prometheus_data_dir }}"
+        state: absent
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

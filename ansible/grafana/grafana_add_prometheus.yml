@@ -1,0 +1,33 @@
+---
+- name: Grafana add prometheus
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/grafana_servers.yml"
+
+  tasks:
+    - name: Wait for Grafana to be available
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        status_code: 200
+      register: _result
+      until: _result.status == 200
+      retries: 5
+      delay: 5
+
+    - name: Create Prometheus Data Source in Grafana
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/datasources"
+        method: POST
+        user: "{{ grafana_api_user }}"
+        password: "{{ grafana_api_password }}"
+        force_basic_auth: yes
+        status_code: [200, 409] # 200 是成功，409 是代表已經存在（避免重複執行噴錯）
+        body_format: json
+        body:
+          name: "Prometheus"
+          type: "prometheus"
+          access: "proxy"
+          url: "{{ prometheus_service_url }}"
+          basicAuth: false
+          isDefault: true # 設為預設數據源

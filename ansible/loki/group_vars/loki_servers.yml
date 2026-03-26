@@ -1,0 +1,13 @@
+---
+loki_version: "2.9.4"
+loki_user: "ec2-user"
+loki_group: "ec2-user"
+
+# 安裝路徑
+loki_install_base: "/home/ec2-user"
+loki_install_dir: "{{ loki_install_base }}/loki-{{ loki_version }}"
+loki_link_dir: "{{ loki_install_base }}/loki"
+
+# 資料存放路徑 (對應 yaml 設定)
+loki_data_root: "/data/loki"
+loki_config_dir: "/etc/loki"

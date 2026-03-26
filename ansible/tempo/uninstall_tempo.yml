@@ -1,0 +1,44 @@
+---
+- name: Uninstall Grafana Tempo
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/tempo_servers.yml"
+
+  tasks:
+    - name: Stop and disable Tempo service
+      ansible.builtin.systemd:
+        name: tempo
+        state: stopped
+        enabled: no
+      ignore_errors: yes # 預防服務本來就沒跑
+
+    - name: Remove Tempo systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/tempo.service
+        state: absent
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Remove Tempo binary from /usr/local/bin
+      ansible.builtin.file:
+        path: /usr/local/bin/tempo
+        state: absent
+
+    - name: Remove Tempo configuration and data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ tempo_config_dir }}"
+        - "{{ tempo_data_dir }}"
+
+    # # 這個在砍 grafana 的時候會順便砍，這裡不執行  
+    # - name: Remove Tempo provisioning from Grafana
+    #   ansible.builtin.file:
+    #     path: "{{ item }}"
+    #     state: absent
+    #   loop:
+    #     - "/home/ec2-user/grafana/conf/provisioning/datasources/tempo.yaml"

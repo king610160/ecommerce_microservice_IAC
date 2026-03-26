@@ -1,0 +1,37 @@
+- name:  argocd
+  hosts: localhost
+
+  tasks:
+    # Install ArgoCD
+    - name: establish argocd's namespace
+      ansible.builtin.shell:
+        cmd: kubectl create namespace argocd
+
+    - name: apply git yaml
+      ansible.builtin.shell:
+        cmd: kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+    - name: Get argocd password
+      ansible.builtin.shell:
+        cmd: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+      register: argocd_apply_result
+
+    - name: Show argocd_apply_result
+      ansible.builtin.debug:
+        msg: "{{ argocd_apply_result.stdout_lines }}"
+
+    # Install metrics server
+    - name: Install metrics server
+      ansible.builtin.shell:
+        cmd: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+    - name: Get system container
+      ansible.builtin.shell:
+        cmd: kubectl get pods -n kube-system
+      register: metric_server_result
+
+    - name: Print result
+      ansible.builtin.debug:
+        msg: "{{ metric_server_result.stdout_lines }}"
+    
+    

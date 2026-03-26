@@ -1,0 +1,37 @@
+---
+# host
+hosts: aws_ec2
+
+grafana_version: "12.1.1"
+# 這裡對應你提供的下載檔名（包含那一串隨機數字）
+grafana_tarball_name: "grafana-enterprise_12.1.1_16903967602_linux_amd64.tar.gz"
+
+grafana_user: "ec2-user"
+grafana_group: "ec2-user"
+
+# 目錄定義
+grafana_base_dir: "/home/ec2-user"
+grafana_install_dir: "{{ grafana_base_dir }}/grafana-{{ grafana_version }}"
+grafana_link_dir: "{{ grafana_base_dir }}/grafana"
+
+# 外部數據與日誌目錄
+grafana_data_dir: "/data/grafana/data"
+grafana_log_dir: "/data/grafana/log"
+
+
+####
+# grafana 的相關設定
+# grafana 的登入帳密，正式環境通常用 vault 加密
+grafana_api_user: "admin"
+grafana_api_password: "admin"
+grafana_port: 3000
+
+# prometheus，需根據實際環境調整
+prometheus_service_url: "http://10.0.2.19:9090"
+
+# loki，需根據實際環境調整
+loki_service_url: "http://10.0.2.19:3100"
+
+# tempo，需根據實際環境調整
+tempo_service_url: "http://10.0.2.19:3200"
+grafana_conf_dir: "{{ grafana_link_dir }}/conf"

@@ -1,0 +1,133 @@
+---
+- name: Install Grafana Loki
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/loki_servers.yml"
+
+  tasks:
+    # # 封閉環境可能會不能確認，有 hang 住，所以註解掉
+    # - name: Ensure unzip is installed
+    #   ansible.builtin.package:
+    #     name: unzip
+    #     state: present
+
+    - name: Create Loki directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ loki_user }}"
+        group: "{{ loki_group }}"
+        mode: '0755'
+      loop:
+        - "{{ loki_install_dir }}"
+        - "{{ loki_config_dir }}"
+        - "{{ loki_data_root }}"
+        - "{{ loki_data_root }}/chunks"
+        - "{{ loki_data_root }}/rules"
+        - "{{ loki_data_root }}/retention"
+
+    # # 這裡因為是封閉環境，所以會在外部下載好，放到 ec2-user 的目錄下
+    # - name: Download Loki binary zip
+    #   ansible.builtin.get_url:
+    #     url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-linux-amd64.zip"
+    #     dest: "{{ loki_install_base }}/loki-linux-amd64.zip"
+    #     mode: '0644'
+
+    - name: Unzip Loki binary
+      ansible.builtin.unarchive:
+        src: "{{ loki_install_base }}/loki-linux-amd64.zip"
+        dest: "{{ loki_install_dir }}"
+        remote_src: yes
+        owner: "{{ loki_user }}"
+        group: "{{ loki_group }}"
+
+    - name: Rename binary for convenience
+      ansible.builtin.command:
+        cmd: "mv {{ loki_install_dir }}/loki-linux-amd64 {{ loki_install_dir }}/loki"
+        creates: "{{ loki_install_dir }}/loki"
+
+    - name: Create soft link for Loki
+      ansible.builtin.file:
+        src: "{{ loki_install_dir }}"
+        dest: "{{ loki_link_dir }}"
+        state: link
+        owner: "{{ loki_user }}"
+        group: "{{ loki_group }}"
+
+    - name: Deploy Loki Configuration
+      ansible.builtin.template:
+        src: ../templates/loki.yml.j2
+        dest: "{{ loki_config_dir }}/loki.yml"
+        owner: "{{ loki_user }}"
+        group: "{{ loki_group }}"
+        mode: '0644'
+      notify: Restart Loki
+
+    - name: Deploy Loki Systemd Service
+      ansible.builtin.template:
+        src: ../templates/loki.service.j2
+        dest: /etc/systemd/system/loki.service
+        mode: '0644'
+      notify: Reload Systemd
+
+    - name: Change owner of /home/ec2 and /data/loki
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ loki_user }}"
+        group: "{{ loki_group }}"
+        recurse: yes
+      loop:
+        - "{{ loki_install_base }}"
+        - "{{ loki_data_root }}"
+
+    - name: Check /home/ec2
+      ansible.builtin.command:
+        cmd: "ls -l {{ loki_install_base }}"
+      register: ec2_user_folder_result
+
+    - name: Show ec2-user's folder for check soft link
+      ansible.builtin.debug:
+        msg: "{{ ec2_user_folder_result.stdout_lines }}"
+
+    - name: Check /data
+      ansible.builtin.command:
+        cmd: "ls -l /data"
+      register: data_folder_result
+
+    - name: Show data folder permission
+      ansible.builtin.debug:
+        msg: "{{ data_folder_result.stdout_lines }}"
+
+    - name: Ensure Loki is started and enabled
+      ansible.builtin.systemd:
+        name: loki
+        state: started
+        enabled: yes
+
+    - name: Wait for Loki to be ready
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:3100/ready"
+        method: GET
+        status_code: 200     # 我們堅持只要 200，503 會觸發重試
+      register: _result
+      until: _result.status == 200
+      retries: 20            # 增加重試次數 (20次 * 5秒 = 100秒，足夠應付 15s 等待期)
+      delay: 5               # 每 5 秒檢查一次
+      # 為了 debug，你可以加上這行，這樣重試時如果還是 503，你會看到目前的內容
+      until: _result.status == 200
+
+    - name: Cleanup zip file
+      ansible.builtin.file:
+        path: "{{ loki_install_base }}/loki-linux-amd64.zip"
+        state: absent
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Restart Loki
+      ansible.builtin.systemd:
+        name: loki
+        state: restarted

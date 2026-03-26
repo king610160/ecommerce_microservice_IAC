@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: {{ tempo_service_url }}
+    isDefault: false
+    editable: true
+    jsonData:
+      # 這裡是進階設定：讓 Tempo 知道去哪裡找 Log
+      lokiSearch:
+        datasourceUid: 'loki' # 這裡要對應你 Loki 資料源的 UID
+      nodeGraph:
+        enabled: true

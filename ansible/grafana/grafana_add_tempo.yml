@@ -1,0 +1,30 @@
+---
+- name: Configure Grafana Data Sources
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/grafana_servers.yml"
+
+  tasks:
+    - name: Ensure Grafana provisioning directory exists
+      ansible.builtin.file:
+        path: "{{ grafana_conf_dir }}/provisioning/datasources"
+        state: directory
+        owner: root
+        group: root 
+        mode: '0755'
+
+    - name: Provision Tempo Data Source
+      ansible.builtin.template:
+        src: ../templates/grafana_ds_tempo.yml.j2
+        dest: "{{ grafana_conf_dir }}/provisioning/datasources/tempo.yml"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Grafana
+
+  handlers:
+    - name: Restart Grafana
+      ansible.builtin.systemd:
+        name: grafana
+        state: restarted

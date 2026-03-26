@@ -1,0 +1,29 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: {{ promtail_data_dir }}/positions.yaml
+
+clients:
+  - url: {{ loki_push_url }}
+
+scrape_configs:
+  - job_name: journal
+    journal:
+      max_age: 12h
+      path: /var/log/journal
+      labels:
+        job: system_logs
+        instance: {{ promtail_target_host }}
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: 'unit'
+
+  - job_name: app-log
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: varlogs
+          instance: {{ promtail_target_host }}
+          __path__: /var/log/**/*.log

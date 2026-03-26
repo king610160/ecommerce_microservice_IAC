@@ -1,0 +1,98 @@
+---
+- name: Install Grafana via Tarball
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/grafana_servers.yml"
+
+  tasks:
+    - name: Create Grafana data and log directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ grafana_user }}"
+        group: "{{ grafana_group }}"
+        mode: '0755'
+      loop:
+        - "{{ grafana_data_dir }}"
+        - "{{ grafana_log_dir }}"
+
+    - name: Download Grafana Tarball
+      ansible.builtin.get_url:
+        url: "https://dl.grafana.com/grafana-enterprise/release/{{ grafana_version }}/{{ grafana_tarball_name }}"
+        dest: "{{ grafana_base_dir }}/{{ grafana_tarball_name }}"
+        mode: '0644'
+
+    - name: Untar Grafana file
+      ansible.builtin.command:
+        cmd: "tar -xvzf {{ grafana_base_dir }}/{{ grafana_tarball_name }} -C {{ grafana_base_dir }}"
+      args:
+        creates: "{{ grafana_install_dir }}"
+
+    - name: Create soft link for Grafana
+      ansible.builtin.file:
+        src: "{{ grafana_install_dir }}"
+        dest: "{{ grafana_link_dir }}"
+        state: link
+        owner: "{{ grafana_user }}"
+        group: "{{ grafana_group }}"
+        force: yes
+
+    - name: Deploy Grafana Systemd Service
+      ansible.builtin.template:
+        src: templates/grafana.service.j2
+        dest: /etc/systemd/system/grafana.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Systemd
+
+    - name: Change owner of /home/ec2 and /data/grafana
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ grafana_user }}"
+        group: "{{ grafana_group }}"
+        recurse: yes
+      loop:
+        - "{{ grafana_base_dir }}"
+        - "{{ grafana_data_dir }}"
+        - "{{ grafana_log_dir }}"
+
+    - name: Check /home/ec2
+      ansible.builtin.command:
+        cmd: "ls -l {{ grafana_base_dir }}"
+      register: ec2_user_folder_result
+
+    - name: Show ec2-user's folder for check soft link
+      ansible.builtin.debug:
+        msg: "{{ ec2_user_folder_result.stdout_lines }}"
+
+    - name: Check /data
+      ansible.builtin.command:
+        cmd: "ls -l /data"
+      register: data_folder_result
+
+    - name: Show data folder permission
+      ansible.builtin.debug:
+        msg: "{{ data_folder_result.stdout_lines }}"
+
+    - name: Cleanup Downloaded Tarball
+      ansible.builtin.file:
+        path: "{{ grafana_base_dir }}/{{ grafana_tarball_name }}"
+        state: absent
+
+    - name: Ensure Grafana is started and enabled
+      ansible.builtin.systemd:
+        name: grafana
+        state: started
+        enabled: yes
+
+    - name: Wait for Grafana to start (Port 3000)
+      ansible.builtin.wait_for:
+        port: 3000
+        timeout: 30
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

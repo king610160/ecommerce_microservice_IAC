@@ -1,0 +1,23 @@
+server:
+  http_listen_port: {{ tempo_http_port }}
+
+# 使用 telemetry 進行收容
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+        grpc:
+
+# 存在指定目錄下
+storage:
+  trace:
+    backend: local
+    local:
+      path: {{ tempo_data_dir }}/traces
+    wal:
+      path: {{ tempo_data_dir }}/wal
+
+compactor:
+  compaction:
+    block_retention: 48h  # Trace 資料量大，建議先存 2 天

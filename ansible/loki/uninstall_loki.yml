@@ -1,0 +1,51 @@
+---
+- name: Uninstall Grafana Loki
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/loki_servers.yml"
+
+  tasks:
+    - name: Stop and disable Loki service
+      ansible.builtin.systemd:
+        name: loki
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Remove Loki Systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/loki.service
+        state: absent
+      notify: Reload Systemd
+
+    - name: Remove Loki soft link
+      ansible.builtin.file:
+        path: "{{ loki_link_dir }}"
+        state: absent
+
+    - name: Remove Loki directories (Install, Config, and Data)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ loki_install_dir }}"
+        - "{{ loki_config_dir }}"
+        - "{{ loki_data_root }}"
+
+    - name: Remove Loki binary zip (if exists)
+      ansible.builtin.file:
+        path: "{{ loki_install_base }}/loki-linux-amd64.zip"
+        state: absent
+        
+    # # 這個在砍 grafana 的時候會順便砍，這裡不執行 
+    # - name: Remove Loki provisioning from Grafana
+    #   ansible.builtin.file:
+    #     path: "/home/ec2-user/grafana/conf/provisioning/datasources/loki.yaml"
+    #     state: absent
+    #   ignore_errors: yes
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

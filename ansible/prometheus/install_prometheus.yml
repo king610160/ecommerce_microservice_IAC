@@ -1,0 +1,126 @@
+---
+- name: Install Prometheus via Tarball
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/prometheus_servers.yml"
+
+  tasks:
+    - name: Create Prometheus directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_group }}"
+        mode: '0755'
+      loop:
+        - "{{ prometheus_data_dir }}"
+
+    # # 這裡因為是封閉環境，所以會在外部下載好，放到 ec2-user 的目錄下
+    # - name: Download Prometheus Tarball
+    #   ansible.builtin.get_url:
+    #     url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+    #     dest: "{{ prometheus_base_dir }}/prometheus-{{ prometheus_version }}.tar.gz"
+    #     mode: '0644'
+
+    - name: Untar the file
+      ansible.builtin.command:
+        cmd: "tar -xvzf {{ prometheus_base_dir }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz -C {{ prometheus_base_dir }}"
+      args:
+        creates: "{{ prometheus_base_dir }}/prometheus-{{ prometheus_version }}.linux-amd64"
+
+    - name: Create soft link
+      ansible.builtin.file:
+        # file 模組會檢查連結是否正確，command 執行第二次會報 "File exists" 錯誤
+        src: "{{ prometheus_base_dir }}/prometheus-{{ prometheus_version }}.linux-amd64"
+        dest: "{{ prometheus_base_dir }}/prometheus"
+        state: link
+        force: yes
+
+    - name: Deploy Prometheus Configuration from Jinja2 template
+      ansible.builtin.template:
+        src: templates/prometheus.yml.j2
+        dest: "{{ prometheus_base_dir }}/prometheus/prometheus.yml"
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_group }}"
+        mode: '0644'
+      notify: Restart Prometheus # 設定檔變動時自動重啟
+
+    - name: Change owner of /home/ec2 and /data/prometheus
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_group }}"
+        recurse: yes
+      loop:
+        - "{{ prometheus_base_dir }}"
+        - "{{ prometheus_data_dir }}"
+
+    - name: Check /home/ec2
+      ansible.builtin.command:
+        cmd: "ls -l {{ prometheus_base_dir }}"
+      register: ec2_user_folder_result
+
+    - name: Show ec2-user's folder for check soft link
+      ansible.builtin.debug:
+        msg: "{{ ec2_user_folder_result.stdout_lines }}"
+
+    - name: Check /data
+      ansible.builtin.command:
+        cmd: "ls -l /data"
+      register: data_folder_result
+
+    - name: Show data folder permission
+      ansible.builtin.debug:
+        msg: "{{ data_folder_result.stdout_lines }}"
+
+    - name: Deploy Systemd Service file
+      ansible.builtin.template:
+        src: templates/prometheus.service.j2
+        dest: /etc/systemd/system/prometheus.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Systemd
+
+    - name: Ensure Prometheus  is started and enabled
+      ansible.builtin.systemd:
+        name: prometheus
+        state: started
+        enabled: yes
+
+    - name: Force all notified handlers to run at this point
+      ansible.builtin.meta: flush_handlers
+      # 這行會叫 Ansible 先去執行 Reload Systemd 或 Restart Prometheus
+
+    - name: Wait for Prometheus to be ready (Port 9090)
+      ansible.builtin.wait_for:
+        port: 9090
+        delay: 5
+        timeout: 30
+
+    - name: Check Prometheus Metrics Endpoint
+      ansible.builtin.uri:
+        url: "http://localhost:9090/metrics"
+        method: GET
+        return_content: yes
+      register: metrics_output
+
+    - name: Show Metrics Content (Optional)
+      ansible.builtin.debug:
+        msg: "Metrics status: {{ metrics_output.status }}"
+
+    - name: Cleanup Prometheus tarball
+      ansible.builtin.file:
+        path: "{{ prometheus_base_dir }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        state: absent
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Restart Prometheus
+      ansible.builtin.systemd:
+        name: prometheus
+        state: restarted

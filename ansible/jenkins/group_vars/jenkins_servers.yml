@@ -1,0 +1,13 @@
+---
+# 將 java-21-openjdk 改為 Amazon Linux 2023 提供的名稱
+java_package: "java-21-amazon-corretto-headless"
+
+# Jenkins Repository 資訊
+jenkins_repo_url: "https://pkg.jenkins.io/redhat-stable/jenkins.repo"
+jenkins_gpg_key: "https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key"
+
+# 端口
+jenkins_port: 8080
+
+# host
+hosts: aws_ec2

@@ -1,0 +1,47 @@
+---
+- name: Uninstall Node Exporter
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/node_exporter_servers.yml"
+
+  tasks:
+    - name: Stop and disable Node Exporter service
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Remove Node Exporter Systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/node_exporter.service
+        state: absent
+      notify: Reload systemd
+
+    - name: Remove Node Exporter binary
+      ansible.builtin.file:
+        path: "{{ node_exporter_bin_dir }}/node_exporter"
+        state: absent
+
+    # 如果你當初有開防火牆，可以取消下面註解來關閉 Port
+    # - name: Close firewall port for Node Exporter
+    #   ansible.posix.firewalld:
+    #     port: "{{ node_exporter_port }}/tcp"
+    #     permanent: yes
+    #     state: disabled
+    #     immediate: yes
+    #   ignore_errors: yes
+
+    - name: Cleanup any remaining temporary files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/node_exporter.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

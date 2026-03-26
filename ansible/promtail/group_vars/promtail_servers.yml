@@ -1,0 +1,19 @@
+---
+# 因為要收系統日誌，所以要設定為 promtail
+promtail_version: "2.9.4"
+promtail_user: "root"
+promtail_group: "root"
+
+# 安裝路徑
+promtail_install_base: "/home/ec2-user"
+promtail_install_dir: "{{ promtail_install_base }}/promtail-{{ promtail_version }}"
+promtail_link_dir: "{{ promtail_install_base }}/promtail"
+
+# 設定與資料路徑
+promtail_config_dir: "/etc/promtail"
+promtail_data_dir: "/data/promtail"
+
+# 關鍵變數：Loki 地址與本機識別，需根據實際環境調整
+loki_url: "http://10.0.2.19"
+loki_push_url: "{{ loki_url }}:3100/loki/api/v1/push"
+promtail_target_host: "{{ inventory_hostname }}" # inventory_hostname 是執行的主機名

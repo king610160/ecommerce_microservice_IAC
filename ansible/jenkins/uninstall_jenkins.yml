@@ -1,0 +1,49 @@
+---
+- name: Uninstall Jenkins and Cleanup Environment
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/jenkins_servers.yml"
+  tasks:
+
+    - name: Stop and Disable Jenkins service
+      ansible.builtin.systemd:
+        name: jenkins
+        state: stopped
+        enabled: no
+      ignore_errors: yes # 即使服務本來就沒跑，也繼續執行
+
+    - name: Remove Jenkins package
+      ansible.builtin.dnf:
+        name: jenkins
+        state: absent
+
+    - name: Remove Java package (Optional)
+      ansible.builtin.dnf:
+        name: "{{ java_package }}"
+        state: absent
+      # 如果這台機器還有其他服務要用 Java，可以註解掉這段
+
+    - name: Remove Jenkins Repository file
+      ansible.builtin.file:
+        path: /etc/yum.repos.d/jenkins.repo
+        state: absent
+
+    - name: Remove Jenkins data and cache directories (Deep Clean)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/jenkins        # Jenkins 的 Job、外掛與資料庫
+        - /var/cache/jenkins      # 緩存
+        - /var/log/jenkins        # 日誌
+
+    ## 這邊是設定 jenkins 的防火牆
+    # - name: Clean up firewalld port 8080
+    #   ansible.posix.firewalld:
+    #     port: 8080/tcp
+    #     permanent: yes
+    #     state: disabled
+    #     immediate: yes
+    #   when: ansible_facts.services['firewalld.service'] is defined
+    #   ignore_errors: yes

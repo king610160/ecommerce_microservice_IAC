@@ -1,0 +1,25 @@
+[Unit]
+Description=Grafana Instance
+Documentation=http://docs.grafana.org
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ grafana_user }}
+Group={{ grafana_group }}
+Type=simple
+
+WorkingDirectory={{ grafana_link_dir }}
+RuntimeDirectory=grafana
+
+# 使用變數動態指定路徑與配置
+ExecStart={{ grafana_link_dir }}/bin/grafana-server \
+    --config={{ grafana_link_dir }}/conf/defaults.ini \
+    --homepath={{ grafana_link_dir }} \
+    cfg:default.paths.logs={{ grafana_log_dir }} \
+    cfg:default.paths.data={{ grafana_data_dir }}
+
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

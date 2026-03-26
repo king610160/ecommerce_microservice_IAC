@@ -1,0 +1,44 @@
+---
+- name: Uninstall Promtail
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/promtail_servers.yml"
+
+  tasks:
+    - name: Stop and disable Promtail service
+      ansible.builtin.systemd:
+        name: promtail
+        state: stopped
+        enabled: no
+      ignore_errors: yes # 預防服務本來就沒跑或已手動停止
+
+    - name: Remove Promtail Systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/promtail.service
+        state: absent
+      notify: Reload Systemd
+
+    - name: Remove Promtail soft link
+      ansible.builtin.file:
+        path: "{{ promtail_link_dir }}"
+        state: absent
+
+    - name: Remove Promtail installation and data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ promtail_install_dir }}"
+        - "{{ promtail_config_dir }}"
+        - "{{ promtail_data_dir }}"
+
+    - name: Final check - ensure Promtail binary is gone
+      ansible.builtin.file:
+        path: "{{ promtail_install_base }}/promtail-linux-amd64.zip"
+        state: absent
+
+  handlers:
+    - name: Reload Systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

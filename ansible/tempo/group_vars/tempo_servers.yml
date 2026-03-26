@@ -1,0 +1,11 @@
+---
+tempo_version: "2.3.1"
+tempo_user: "ec2-user"
+tempo_group: "ec2-user"
+
+# 目錄設定
+tempo_config_dir: "/etc/tempo"
+tempo_data_dir: "/data/tempo"
+
+# 服務設定
+tempo_http_port: 3200

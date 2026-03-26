@@ -1,0 +1,78 @@
+---
+- name: Install Grafana Tempo
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/tempo_servers.yml"
+
+  tasks:
+    - name: Create Tempo directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ tempo_user }}"
+        group: "{{ tempo_group }}"
+        mode: '0755'
+      loop:
+        - "{{ tempo_config_dir }}"
+        - "{{ tempo_data_dir }}/traces"
+        - "{{ tempo_data_dir }}/wal"
+
+    # # 這裡因為是封閉環境，所以會在外部下載好，放到 ec2-user 的目錄下
+    # - name: Download Tempo binary
+    #   ansible.builtin.get_url:
+    #     url: "https://github.com/grafana/tempo/releases/download/v{{ tempo_version }}/tempo_{{ tempo_version }}_linux_amd64.tar.gz"
+    #     dest: "/tmp/tempo.tar.gz"
+    #     mode: '0644'
+
+    - name: Unarchive Tempo binary
+      ansible.builtin.unarchive:
+        src: "/tmp/tempo.tar.gz"
+        dest: "/usr/local/bin"
+        remote_src: yes
+        creates: "/usr/local/bin/tempo"
+
+    - name: Deploy Tempo configuration
+      ansible.builtin.template:
+        src: ../templates/tempo.yml.j2
+        dest: "{{ tempo_config_dir }}/tempo.yml"
+        owner: "{{ tempo_user }}"
+        group: "{{ tempo_group }}"
+      notify: Restart Tempo
+
+    - name: Create Tempo systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/tempo.service
+        content: |
+          [Unit]
+          Description=Grafana Tempo
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ tempo_user }}
+          Group={{ tempo_group }}
+          ExecStart=/usr/local/bin/tempo -config.file={{ tempo_config_dir }}/tempo.yml
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Ensure Tempo is started and enabled
+      ansible.builtin.systemd:
+        name: tempo
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: delete tempo.tar.gz
+      ansible.builtin.file:
+        path: "/tmp/tempo.tar.gz"
+        state: absent
+      become: yes  # 確保用 root 權限去刪除 tmp 下的檔案
+
+  handlers:
+    - name: Restart Tempo
+      ansible.builtin.systemd:
+        name: tempo
+        state: restarted

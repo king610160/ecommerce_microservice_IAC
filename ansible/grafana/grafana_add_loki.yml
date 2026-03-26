@@ -1,0 +1,27 @@
+---
+- name: Grafana add prometheus
+  hosts: "{{ hosts }}"
+  become: yes
+  vars_files:
+    - "group_vars/grafana_servers.yml"
+
+  tasks:
+    - name: Add Loki Data Source to Grafana
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/datasources"
+        method: POST
+        user: "{{ grafana_api_user }}"
+        password: "{{ grafana_api_password }}"
+        force_basic_auth: yes
+        status_code: [200, 409] # 200 是成功建立，409 是已存在
+        body_format: json
+        body:
+          name: "Loki"
+          type: "loki"
+          access: "proxy"
+          url: "{{ loki_service_url }}"
+          basicAuth: false
+          isDefault: false # 通常 Prometheus 是預設，Loki 作為日誌來源
+          jsonData:
+            # 這裡可以加入一些進階設定，例如最大行數
+            maxLines: 1000
